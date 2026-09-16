@@ -1,0 +1,1 @@
+export { createSharedSupabaseClient } from "./supabase";
