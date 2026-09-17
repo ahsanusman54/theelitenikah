@@ -35,7 +35,14 @@ export default async function SettingsPage() {
       initialProfileVisibility={profile?.profile_visibility ?? "everyone"}
       initialPhotoPrivacy={profile?.photo_privacy ?? false}
       initialEmailPrefs={
-        profile?.email_notification_prefs ?? { like: true, super_like: true, match: true, view: true }
+        profile?.email_notification_prefs ?? {
+          verification: true,
+          new_messages: true,
+          new_visitors: true,
+          likes: true,
+          new_matches: true,
+          promotions: true,
+        }
       }
       initialPushNotifications={profile?.push_notifications_enabled ?? true}
       initialBlocked={blocked}

@@ -11,10 +11,12 @@ export type BlockedProfile = {
 };
 
 export type EmailPrefs = {
-  like: boolean;
-  super_like: boolean;
-  match: boolean;
-  view: boolean;
+  verification: boolean;
+  new_messages: boolean;
+  new_visitors: boolean;
+  likes: boolean;
+  new_matches: boolean;
+  promotions: boolean;
 };
 
 type TabKey =
@@ -28,36 +30,6 @@ type TabKey =
   | "removed"
   | "emailNotifications"
   | "pushNotifications";
-
-function YesNoRow({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <span className="text-sm text-foreground/80">{label}</span>
-      <div className="flex gap-6">
-        {[true, false].map((option) => (
-          <label key={String(option)} className="flex items-center gap-1.5 text-xs text-foreground/60">
-            <input
-              type="radio"
-              checked={value === option}
-              disabled={disabled}
-              onChange={() => onChange(option)}
-            />
-          </label>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
   return (
@@ -479,50 +451,77 @@ export default function SettingsClient({
           {tab === "emailNotifications" && (
             <div>
               <h2 className="font-display text-lg font-semibold text-foreground">Email notifications</h2>
-              <p className="mt-2 rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                No email provider is connected yet, so no emails actually send from these yet — but
-                every preference below is saved for real, and takes effect the moment email is wired in.
-              </p>
-              <p className="mt-4 text-sm text-foreground/60">Send an email notice when:</p>
 
-              <div className="mt-3">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-1">
-                  <span className="text-sm font-semibold text-foreground">Activity</span>
-                  <div className="flex gap-6 text-xs font-semibold text-foreground/50">
-                    <span>Yes</span>
-                    <span>No</span>
-                  </div>
-                </div>
-                <YesNoRow
-                  label="Someone likes your profile"
-                  value={emailPrefs.like}
-                  disabled={toggleSaving}
-                  onChange={(v) => updateEmailPref("like", v)}
-                />
-                <YesNoRow
-                  label="Someone super-likes your profile"
-                  value={emailPrefs.super_like}
-                  disabled={toggleSaving}
-                  onChange={(v) => updateEmailPref("super_like", v)}
-                />
-                <YesNoRow
-                  label="Someone views your profile"
-                  value={emailPrefs.view}
-                  disabled={toggleSaving}
-                  onChange={(v) => updateEmailPref("view", v)}
-                />
+              <p className="mt-4 text-sm text-foreground/60">Notifications will be sent to this email address:</p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="font-medium text-brand-purple">{email}</span>
+                <button
+                  onClick={() => setTab("email")}
+                  title="Change email"
+                  aria-label="Change email"
+                  className="text-brand-purple hover:opacity-70"
+                >
+                  ✏️
+                </button>
               </div>
 
-              <div className="mt-6">
-                <div className="flex items-center justify-between border-b border-gray-100 pb-1">
-                  <span className="text-sm font-semibold text-foreground">Matches</span>
-                </div>
-                <YesNoRow
-                  label="You get a new match"
-                  value={emailPrefs.match}
-                  disabled={toggleSaving}
-                  onChange={(v) => updateEmailPref("match", v)}
-                />
+              <p className="mt-2 rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                No email provider is connected yet, so nothing actually sends from these toggles right
+                now — but every preference below is saved for real, and takes effect the moment email
+                is wired in.
+              </p>
+
+              <h3 className="mt-6 font-display text-base font-semibold text-foreground">
+                Choose notifications you would like to receive:
+              </h3>
+
+              <div className="mt-3 flex flex-col divide-y divide-gray-100">
+                {(
+                  [
+                    {
+                      key: "verification" as const,
+                      title: "Verification",
+                      desc: "Be notified when an admin verifies your account.",
+                    },
+                    {
+                      key: "new_messages" as const,
+                      title: "New messages",
+                      desc: "Be notified when someone sends you a message.",
+                    },
+                    {
+                      key: "new_visitors" as const,
+                      title: "New visitors",
+                      desc: "Find out when someone views your profile page.",
+                    },
+                    {
+                      key: "likes" as const,
+                      title: "Likes",
+                      desc: "Find out when someone likes or super-likes you.",
+                    },
+                    {
+                      key: "new_matches" as const,
+                      title: "New matches",
+                      desc: "Get notified when you match with someone.",
+                    },
+                    {
+                      key: "promotions" as const,
+                      title: "Promotions",
+                      desc: "Get discounts on memberships, credits, and other offers.",
+                    },
+                  ]
+                ).map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                      <p className="text-sm text-foreground/60">{item.desc}</p>
+                    </div>
+                    <Toggle
+                      checked={emailPrefs[item.key]}
+                      disabled={toggleSaving}
+                      onChange={() => updateEmailPref(item.key, !emailPrefs[item.key])}
+                    />
+                  </div>
+                ))}
               </div>
 
               <p className="mt-6 text-xs text-foreground/40">
