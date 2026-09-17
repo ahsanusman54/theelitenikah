@@ -3,20 +3,42 @@
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const MARITAL_STATUS_OPTIONS = [
+  { value: "never_married", label: "Never married" },
+  { value: "divorced", label: "Divorced" },
+  { value: "widowed", label: "Widowed" },
+];
+
+const RELIGIOUS_PRACTICE_OPTIONS = [
+  { value: "very_practicing", label: "Very practicing" },
+  { value: "practicing", label: "Practicing" },
+  { value: "moderately_practicing", label: "Moderately practicing" },
+  { value: "learning", label: "Learning" },
+];
+
 export default function ProfileEditor({
   userId,
   initialName,
   initialBio,
   initialPhotos,
+  initialMaritalStatus,
+  initialReligiousPractice,
+  initialWillingToRelocate,
 }: {
   userId: string;
   initialName: string;
   initialBio: string;
   initialPhotos: string[];
+  initialMaritalStatus: string;
+  initialReligiousPractice: string;
+  initialWillingToRelocate: boolean;
 }) {
   const [name, setName] = useState(initialName);
   const [bio, setBio] = useState(initialBio);
   const [photos, setPhotos] = useState<string[]>(initialPhotos);
+  const [maritalStatus, setMaritalStatus] = useState(initialMaritalStatus);
+  const [religiousPractice, setReligiousPractice] = useState(initialReligiousPractice);
+  const [willingToRelocate, setWillingToRelocate] = useState(initialWillingToRelocate);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -29,7 +51,14 @@ export default function ProfileEditor({
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase
       .from("profiles")
-      .update({ name, bio, photos })
+      .update({
+        name,
+        bio,
+        photos,
+        marital_status: maritalStatus || null,
+        religious_practice: religiousPractice || null,
+        willing_to_relocate: willingToRelocate,
+      })
       .eq("user_id", userId);
 
     setSaving(false);
@@ -92,6 +121,44 @@ export default function ProfileEditor({
             rows={4}
             style={{ display: "block", width: "100%" }}
           />
+        </label>
+        <label>
+          Marital status
+          <select
+            value={maritalStatus}
+            onChange={(e) => setMaritalStatus(e.target.value)}
+            style={{ display: "block", width: "100%" }}
+          >
+            <option value="">Select...</option>
+            {MARITAL_STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Religious practice
+          <select
+            value={religiousPractice}
+            onChange={(e) => setReligiousPractice(e.target.value)}
+            style={{ display: "block", width: "100%" }}
+          >
+            <option value="">Select...</option>
+            {RELIGIOUS_PRACTICE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="checkbox"
+            checked={willingToRelocate}
+            onChange={(e) => setWillingToRelocate(e.target.checked)}
+          />
+          Willing to relocate
         </label>
         <button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save"}
