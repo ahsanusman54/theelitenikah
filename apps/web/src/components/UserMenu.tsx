@@ -18,7 +18,11 @@ export default function UserMenu({ displayName, isAdmin }: { displayName: string
   const router = useRouter();
 
   const items = isAdmin
-    ? [...MENU_ITEMS, { href: "/admin/verifications", label: "Verification Requests", icon: "🛡️" }]
+    ? [
+        ...MENU_ITEMS,
+        { href: "/admin/verifications", label: "Verification Requests", icon: "🛡️" },
+        { href: "/admin/users", label: "User Management", icon: "🧑‍🤝‍🧑" },
+      ]
     : MENU_ITEMS;
 
   async function handleLogOut() {
