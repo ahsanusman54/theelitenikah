@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useCall } from "@/components/calls/CallContext";
 
 export type Conversation = {
   chatId: string;
@@ -17,6 +18,8 @@ type Message = {
   chat_id: string;
   sender_id: string;
   content: string;
+  message_type: "text" | "voice";
+  duration_seconds: number | null;
   sent_at: string;
 };
 
@@ -24,6 +27,35 @@ function formatDate(iso: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function VoiceMessage({ path, duration, mine }: { path: string; duration: number | null; mine: boolean }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createSupabaseBrowserClient();
+    supabase.storage
+      .from("chat-media")
+      .createSignedUrl(path, 3600)
+      .then(({ data }) => {
+        if (!cancelled && data) setUrl(data.signedUrl);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return (
+    <div className={`flex items-center gap-2 ${mine ? "flex-row-reverse" : ""}`}>
+      {url ? (
+        <audio controls src={url} className="h-9 max-w-[220px]" />
+      ) : (
+        <span className="text-xs opacity-70">Loading voice note...</span>
+      )}
+      {duration !== null && <span className="text-xs opacity-70">{duration}s</span>}
+    </div>
+  );
 }
 
 export default function MessagesClient({
@@ -35,6 +67,7 @@ export default function MessagesClient({
   initialConversations: Conversation[];
   initialIsOnline: boolean;
 }) {
+  const { startCall } = useCall();
   const [conversations] = useState(initialConversations);
   const [search, setSearch] = useState("");
   const [selectedChatId, setSelectedChatId] = useState<string | null>(
@@ -44,7 +77,13 @@ export default function MessagesClient({
   const [draft, setDraft] = useState("");
   const [isOnline, setIsOnline] = useState(initialIsOnline);
   const [sending, setSending] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const selectedConversation = conversations.find((c) => c.chatId === selectedChatId) ?? null;
 
@@ -63,11 +102,11 @@ export default function MessagesClient({
 
     supabase
       .from("messages")
-      .select("id, chat_id, sender_id, content, sent_at")
+      .select("id, chat_id, sender_id, content, message_type, duration_seconds, sent_at")
       .eq("chat_id", selectedChatId)
       .order("sent_at", { ascending: true })
       .then(({ data }) => {
-        if (!cancelled) setMessages(data ?? []);
+        if (!cancelled) setMessages((data ?? []) as Message[]);
       });
 
     const channel = supabase
@@ -101,9 +140,71 @@ export default function MessagesClient({
       chat_id: selectedChatId,
       sender_id: myId,
       content: draft.trim(),
+      message_type: "text",
     });
     setSending(false);
     if (!error) setDraft("");
+  }
+
+  async function startRecording() {
+    if (!selectedChatId) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    mediaRecorderRef.current = recorder;
+    recordedChunksRef.current = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+    };
+
+    recorder.start();
+    setRecording(true);
+    setRecordSeconds(0);
+    recordTimerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+  }
+
+  async function stopRecordingAndSend() {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || !selectedChatId) return;
+
+    const finalDuration = recordSeconds;
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    setRecording(false);
+
+    const stopped = new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+    recorder.stop();
+    await stopped;
+
+    const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" });
+    if (blob.size === 0) return;
+
+    setUploadingVoice(true);
+    const supabase = createSupabaseBrowserClient();
+    const path = `${selectedChatId}/${myId}/${Date.now()}.webm`;
+
+    const { error: uploadError } = await supabase.storage.from("chat-media").upload(path, blob);
+    if (!uploadError) {
+      await supabase.from("messages").insert({
+        chat_id: selectedChatId,
+        sender_id: myId,
+        content: path,
+        message_type: "voice",
+        duration_seconds: finalDuration,
+      });
+    }
+    setUploadingVoice(false);
+  }
+
+  function cancelRecording() {
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
   }
 
   async function toggleOnline() {
@@ -178,14 +279,28 @@ export default function MessagesClient({
         <div className="flex flex-col rounded-2xl bg-white shadow-sm">
           {selectedConversation ? (
             <>
-              <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
-                <div className="h-9 w-9 overflow-hidden rounded-full bg-gray-200">
-                  {selectedConversation.otherPhoto ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selectedConversation.otherPhoto} alt="" className="h-full w-full object-cover" />
-                  ) : null}
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 overflow-hidden rounded-full bg-gray-200">
+                    {selectedConversation.otherPhoto ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={selectedConversation.otherPhoto} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                  </div>
+                  <p className="font-semibold">{selectedConversation.otherName}</p>
                 </div>
-                <p className="font-semibold">{selectedConversation.otherName}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      startCall(selectedConversation.chatId, selectedConversation.otherUserId, selectedConversation.otherName)
+                    }
+                    title="Video call"
+                    aria-label={`Video call ${selectedConversation.otherName}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-purple text-white hover:bg-brand-purple-light"
+                  >
+                    🎥
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4" style={{ minHeight: 340 }}>
@@ -198,28 +313,60 @@ export default function MessagesClient({
                         : "bg-gray-100 text-foreground"
                     }`}
                   >
-                    {m.content}
+                    {m.message_type === "voice" ? (
+                      <VoiceMessage path={m.content} duration={m.duration_seconds} mine={m.sender_id === myId} />
+                    ) : (
+                      m.content
+                    )}
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
               </div>
 
-              <form onSubmit={sendMessage} className="flex gap-2 border-t border-gray-100 p-3">
-                <input
-                  type="text"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm focus:border-brand-purple focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !draft.trim()}
-                  className="rounded-full bg-brand-pink px-5 py-2 text-sm font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-50"
-                >
-                  Send
-                </button>
-              </form>
+              <div className="border-t border-gray-100 p-3">
+                {recording ? (
+                  <div className="flex items-center gap-3 rounded-full border border-red-200 bg-red-50 px-4 py-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                    <span className="flex-1 text-sm text-red-600">Recording... {recordSeconds}s</span>
+                    <button onClick={cancelRecording} className="text-sm text-foreground/50" aria-label="Cancel recording">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={stopRecordingAndSend}
+                      className="rounded-full bg-brand-pink px-4 py-1.5 text-sm font-semibold text-white"
+                    >
+                      Send
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={sendMessage} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm focus:border-brand-purple focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      disabled={uploadingVoice}
+                      title="Record a voice note"
+                      aria-label="Record a voice note"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {uploadingVoice ? "..." : "🎙️"}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sending || !draft.trim()}
+                      className="rounded-full bg-brand-pink px-5 py-2 text-sm font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-50"
+                    >
+                      Send
+                    </button>
+                  </form>
+                )}
+              </div>
             </>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 py-24 text-center text-foreground/60">
