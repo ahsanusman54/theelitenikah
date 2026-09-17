@@ -18,7 +18,7 @@ export default async function ProfileDetailPage({
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "user_id, name, bio, photos, is_verified, is_premium, is_online, date_of_birth, marital_status, religious_practice, willing_to_relocate, children, drinks, smokes, gender, country, city, occupation, education, religion, languages, interests, sports, interested_in_gender, preferred_age_min, preferred_age_max, last_active_at"
+      "user_id, name, bio, photos, is_verified, is_premium, is_online, date_of_birth, marital_status, religious_practice, willing_to_relocate, children, drinks, smokes, gender, country, city, occupation, education, religion, languages, interests, sports, interested_in_gender, preferred_age_min, preferred_age_max, last_active_at, photo_privacy"
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -70,7 +70,7 @@ export default async function ProfileDetailPage({
       userId={profile.user_id}
       name={profile.name}
       bio={profile.bio}
-      photos={profile.photos ?? []}
+      photos={profile.photo_privacy && !match ? [] : profile.photos ?? []}
       isVerified={profile.is_verified}
       isPremium={profile.is_premium}
       isOnline={profile.is_online}

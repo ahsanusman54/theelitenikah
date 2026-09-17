@@ -29,9 +29,19 @@ export default async function DiscoverPage() {
   const { data: profiles, error } = await supabase
     .from("profiles")
     .select(
-      "user_id, name, bio, photos, is_verified, is_premium, date_of_birth, height_cm, weight_kg, children, drinks, smokes, marital_status, religious_practice, willing_to_relocate"
+      "user_id, name, bio, photos, is_verified, is_premium, date_of_birth, height_cm, weight_kg, children, drinks, smokes, marital_status, religious_practice, willing_to_relocate, photo_privacy"
     )
     .limit(50);
+
+  // Photo privacy: if a candidate has hidden their photos from non-matches,
+  // don't include the real photo URLs unless we've actually matched them.
+  const { data: myMatches } = await supabase
+    .from("matches")
+    .select("user_a, user_b")
+    .or(`user_a.eq.${user!.id},user_b.eq.${user!.id}`);
+  const matchedIds = new Set(
+    (myMatches ?? []).map((m) => (m.user_a === user!.id ? m.user_b : m.user_a))
+  );
 
   const candidates: Candidate[] = (profiles ?? [])
     .filter((p) => !excludeIds.has(p.user_id))
@@ -39,7 +49,7 @@ export default async function DiscoverPage() {
       user_id: p.user_id,
       name: p.name,
       bio: p.bio,
-      photos: p.photos,
+      photos: p.photo_privacy && !matchedIds.has(p.user_id) ? [] : p.photos,
       is_verified: p.is_verified,
       is_premium: p.is_premium,
       date_of_birth: p.date_of_birth,
