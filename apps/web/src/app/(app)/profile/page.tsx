@@ -10,7 +10,7 @@ export default async function ProfilePage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "name, bio, photos, marital_status, religious_practice, willing_to_relocate, date_of_birth, height_cm, weight_kg, children, drinks, smokes"
+      "name, bio, photos, marital_status, religious_practice, willing_to_relocate, date_of_birth, height_cm, weight_kg, children, drinks, smokes, gender, country, city, occupation, education, religion, languages, interests, sports, interested_in_gender, preferred_age_min, preferred_age_max, verification_requested_at"
     )
     .eq("user_id", user!.id)
     .single();
@@ -33,6 +33,19 @@ export default async function ProfilePage() {
           initialChildren={profile?.children ?? ""}
           initialDrinks={profile?.drinks ?? ""}
           initialSmokes={profile?.smokes ?? ""}
+          initialGender={profile?.gender ?? ""}
+          initialCountry={profile?.country ?? ""}
+          initialCity={profile?.city ?? ""}
+          initialOccupation={profile?.occupation ?? ""}
+          initialEducation={profile?.education ?? ""}
+          initialReligion={profile?.religion ?? ""}
+          initialLanguages={profile?.languages ?? []}
+          initialInterests={profile?.interests ?? []}
+          initialSports={profile?.sports ?? []}
+          initialInterestedInGender={profile?.interested_in_gender ?? ""}
+          initialPreferredAgeMin={profile?.preferred_age_min?.toString() ?? ""}
+          initialPreferredAgeMax={profile?.preferred_age_max?.toString() ?? ""}
+          initialVerificationRequestedAt={profile?.verification_requested_at ?? null}
         />
       </div>
     </main>
