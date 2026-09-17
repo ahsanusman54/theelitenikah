@@ -101,33 +101,36 @@ export default function ProfileEditor({
     setMessage(updateError ? `Error: ${updateError.message}` : "Photo uploaded.");
   }
 
+  const inputClass =
+    "mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-purple focus:outline-none";
+
   return (
     <div>
-      <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <label>
+      <form onSubmit={handleSave} className="flex flex-col gap-4">
+        <label className="text-sm font-medium text-foreground/80">
           Name
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            style={{ display: "block", width: "100%" }}
+            className={inputClass}
           />
         </label>
-        <label>
+        <label className="text-sm font-medium text-foreground/80">
           Bio
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             rows={4}
-            style={{ display: "block", width: "100%" }}
+            className={inputClass}
           />
         </label>
-        <label>
+        <label className="text-sm font-medium text-foreground/80">
           Marital status
           <select
             value={maritalStatus}
             onChange={(e) => setMaritalStatus(e.target.value)}
-            style={{ display: "block", width: "100%" }}
+            className={inputClass}
           >
             <option value="">Select...</option>
             {MARITAL_STATUS_OPTIONS.map((opt) => (
@@ -137,12 +140,12 @@ export default function ProfileEditor({
             ))}
           </select>
         </label>
-        <label>
+        <label className="text-sm font-medium text-foreground/80">
           Religious practice
           <select
             value={religiousPractice}
             onChange={(e) => setReligiousPractice(e.target.value)}
-            style={{ display: "block", width: "100%" }}
+            className={inputClass}
           >
             <option value="">Select...</option>
             {RELIGIOUS_PRACTICE_OPTIONS.map((opt) => (
@@ -152,7 +155,7 @@ export default function ProfileEditor({
             ))}
           </select>
         </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <label className="flex items-center gap-2 text-sm font-medium text-foreground/80">
           <input
             type="checkbox"
             checked={willingToRelocate}
@@ -160,21 +163,38 @@ export default function ProfileEditor({
           />
           Willing to relocate
         </label>
-        <button type="submit" disabled={saving}>
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-full bg-brand-pink px-6 py-2.5 font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-60"
+        >
           {saving ? "Saving..." : "Save"}
         </button>
       </form>
 
-      <h2 style={{ marginTop: 32 }}>Photos</h2>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <h2 className="mt-8 font-display text-lg font-semibold text-foreground">Photos</h2>
+      <div className="mt-3 flex flex-wrap gap-3">
         {photos.map((url) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={url} src={url} alt="" width={100} height={100} style={{ objectFit: "cover" }} />
+          <img
+            key={url}
+            src={url}
+            alt=""
+            width={100}
+            height={100}
+            className="h-24 w-24 rounded-lg object-cover"
+          />
         ))}
       </div>
-      <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoUpload}
+        disabled={uploading}
+        className="mt-3 text-sm"
+      />
 
-      {message && <p style={{ marginTop: 12 }}>{message}</p>}
+      {message && <p className="mt-3 text-sm text-foreground/70">{message}</p>}
     </div>
   );
 }

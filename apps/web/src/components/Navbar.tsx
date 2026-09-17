@@ -1,0 +1,55 @@
+import Link from "next/link";
+
+const NAV_LINKS = [
+  { href: "/discover", label: "Discover" },
+  { href: "/messages", label: "Messages" },
+  { href: "/match", label: "Match" },
+  { href: "/activities", label: "Activities" },
+  { href: "/search", label: "Search" },
+];
+
+export default function Navbar({
+  userName,
+  userEmail,
+}: {
+  userName: string | null;
+  userEmail: string;
+}) {
+  const displayName = userName || userEmail.split("@")[0];
+
+  return (
+    <header className="bg-navbar text-white">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+        <Link href="/" className="flex items-center gap-2 font-display text-xl font-bold">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-pink text-white">
+            ♥
+          </span>
+          theelitenikah
+        </Link>
+
+        <nav className="hidden gap-6 text-sm font-medium md:flex">
+          {NAV_LINKS.map((link) => (
+            <Link key={link.href} href={link.href} className="hover:text-brand-pink">
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-4">
+          <Link
+            href="/credits"
+            className="rounded-full bg-brand-pink px-4 py-1.5 text-sm font-semibold hover:bg-brand-pink-dark"
+          >
+            Get more credits
+          </Link>
+          <Link href="/profile" className="flex items-center gap-2 text-sm">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-purple font-semibold">
+              {displayName.charAt(0).toUpperCase()}
+            </span>
+            <span className="hidden sm:inline">{displayName}</span>
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
