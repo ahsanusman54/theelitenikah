@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import ReportBlockMenu from "@/components/ReportBlockMenu";
 
 export default function ProfileDetailClient({
+  myId,
   userId,
   name,
   bio,
@@ -19,6 +22,7 @@ export default function ProfileDetailClient({
   theyLikedYou,
   isMatched,
 }: {
+  myId: string;
   userId: string;
   name: string | null;
   bio: string | null;
@@ -39,6 +43,7 @@ export default function ProfileDetailClient({
   const [matched, setMatched] = useState(isMatched);
   const [activePhoto, setActivePhoto] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
+  const router = useRouter();
 
   async function act(action: "like" | "super_like") {
     if (liked) return;
@@ -173,6 +178,16 @@ export default function ProfileDetailClient({
                 Message (match first)
               </span>
             )}
+          </div>
+
+          <div className="mt-6 border-t border-gray-100 pt-4">
+            <ReportBlockMenu
+              myId={myId}
+              targetUserId={userId}
+              targetName={name || "this member"}
+              variant="buttons"
+              onBlocked={() => router.push("/search")}
+            />
           </div>
         </div>
       </div>

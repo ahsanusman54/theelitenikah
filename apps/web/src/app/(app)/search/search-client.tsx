@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { computeAge, computeMatchScore, type MatchableProfile } from "../discover/match-score";
+import ReportBlockMenu from "@/components/ReportBlockMenu";
 
 export type SearchProfile = {
   user_id: string;
@@ -414,7 +415,7 @@ export default function SearchClient({
                     ● {p.is_online ? "Online" : "Offline"}
                   </span>
                   {p.likesYou && (
-                    <span className="absolute right-2 top-2 rounded-full bg-brand-pink px-2 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="absolute bottom-2 left-2 rounded-full bg-brand-pink px-2 py-0.5 text-[10px] font-semibold text-white">
                       Likes you
                     </span>
                   )}
@@ -425,6 +426,15 @@ export default function SearchClient({
                   )}
                 </div>
               </a>
+
+              <div className="absolute right-2 top-2 z-10" onClick={(e) => e.preventDefault()}>
+                <ReportBlockMenu
+                  myId={myId}
+                  targetUserId={p.user_id}
+                  targetName={p.name || "this member"}
+                  onBlocked={() => setResults((prev) => prev.filter((r) => r.user_id !== p.user_id))}
+                />
+              </div>
 
               <div className="absolute inset-x-0 top-0 flex h-32 items-center justify-center gap-2 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
                 <a

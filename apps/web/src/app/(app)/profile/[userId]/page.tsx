@@ -79,6 +79,7 @@ export default async function ProfileDetailPage({
 
   return (
     <ProfileDetailClient
+      myId={myId}
       userId={profile.user_id}
       name={profile.name}
       bio={profile.bio}
