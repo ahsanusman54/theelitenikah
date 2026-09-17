@@ -42,20 +42,33 @@ export function useCall() {
 export function CallProvider({ myId, myName, children }: { myId: string; myName: string; children: React.ReactNode }) {
   const [status, setStatus] = useState<CallStatus>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [localStream, setLocalStreamState] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [muted, setMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const signalChannelRef = useRef<RealtimeChannel | null>(null);
-  const userChannelRef = useRef<RealtimeChannel | null>(null);
-  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  const localStreamRef = useRef<MediaStream | null>(null);
+
+  // Coordinate "send the offer" so it only happens once BOTH sides are
+  // actually ready: our own signaling channel subscribed, and the callee
+  // has accepted. Whichever finishes second triggers the send. Using refs
+  // (not state) here deliberately -- the effect below that reads these is
+  // mounted once for the app's lifetime, so a state closure would go stale.
+  const signalReadyRef = useRef(false);
+  const calleeAcceptedRef = useRef(false);
+  const offerSentRef = useRef(false);
+
+  const setLocalStream = useCallback((stream: MediaStream | null) => {
+    localStreamRef.current = stream;
+    setLocalStreamState(stream);
+  }, []);
 
   const cleanup = useCallback(() => {
     pcRef.current?.close();
     pcRef.current = null;
-    localStream?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
     setLocalStream(null);
     setRemoteStream(null);
     if (signalChannelRef.current) {
@@ -63,19 +76,32 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
       supabase.removeChannel(signalChannelRef.current);
       signalChannelRef.current = null;
     }
-    pendingCandidatesRef.current = [];
+    signalReadyRef.current = false;
+    calleeAcceptedRef.current = false;
+    offerSentRef.current = false;
     setStatus("idle");
     setCallInfo(null);
     setMuted(false);
     setCameraOff(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localStream]);
+  }, [setLocalStream]);
+
+  const maybeSendOffer = useCallback(async (pc: RTCPeerConnection, signalChannel: RealtimeChannel) => {
+    if (offerSentRef.current) return;
+    if (!signalReadyRef.current || !calleeAcceptedRef.current) return;
+    offerSentRef.current = true;
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    signalChannel.send({ type: "broadcast", event: "offer", payload: { sdp: offer } });
+    setStatus("connected");
+  }, []);
 
   const setupPeerConnection = useCallback(
     (chatId: string, isCaller: boolean, stream: MediaStream) => {
       const supabase = createSupabaseBrowserClient();
       const pc = new RTCPeerConnection(ICE_SERVERS);
       pcRef.current = pc;
+      const pendingCandidates: RTCIceCandidateInit[] = [];
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -100,37 +126,35 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
         .on("broadcast", { event: "offer" }, async ({ payload }) => {
           if (isCaller) return;
           await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          for (const c of pendingCandidatesRef.current) await pc.addIceCandidate(new RTCIceCandidate(c));
-          pendingCandidatesRef.current = [];
+          for (const c of pendingCandidates) await pc.addIceCandidate(new RTCIceCandidate(c));
+          pendingCandidates.length = 0;
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           signalChannel.send({ type: "broadcast", event: "answer", payload: { sdp: answer } });
+          setStatus("connected");
         })
         .on("broadcast", { event: "answer" }, async ({ payload }) => {
           if (!isCaller) return;
           await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
-          setStatus("connected");
         })
         .on("broadcast", { event: "ice-candidate" }, async ({ payload }) => {
           if (pc.remoteDescription) {
             await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
           } else {
-            pendingCandidatesRef.current.push(payload.candidate);
+            pendingCandidates.push(payload.candidate);
           }
         })
         .on("broadcast", { event: "hang-up" }, () => {
           cleanup();
         })
-        .subscribe(async (subStatus) => {
-          if (subStatus === "SUBSCRIBED" && isCaller) {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            signalChannel.send({ type: "broadcast", event: "offer", payload: { sdp: offer } });
-            setStatus("connected");
+        .subscribe((subStatus) => {
+          if (subStatus === "SUBSCRIBED") {
+            signalReadyRef.current = true;
+            if (isCaller) maybeSendOffer(pc, signalChannel);
           }
         });
     },
-    [cleanup]
+    [cleanup, maybeSendOffer]
   );
 
   const startCall = useCallback(
@@ -138,21 +162,25 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
       const supabase = createSupabaseBrowserClient();
       setCallInfo({ chatId, otherUserId, otherName });
       setStatus("outgoing");
+      signalReadyRef.current = false;
+      calleeAcceptedRef.current = false;
+      offerSentRef.current = false;
 
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setLocalStream(stream);
 
-      supabase
-        .channel(`user-calls:${otherUserId}`)
-        .send({
-          type: "broadcast",
-          event: "call-invite",
-          payload: { chatId, callerId: myId, callerName: myName },
-        });
+      // One-off signal, not a lasting subscription: httpSend() delivers via
+      // REST without needing .subscribe() first, and we remove the channel
+      // right after so it doesn't linger in the client's channel registry.
+      const inviteChannel = supabase.channel(`user-calls:${otherUserId}`);
+      await inviteChannel.httpSend("call-invite", { chatId, callerId: myId, callerName: myName });
+      supabase.removeChannel(inviteChannel);
 
+      // Subscribes immediately so we're ready the moment the callee
+      // accepts, but the offer itself waits for maybeSendOffer's checks.
       setupPeerConnection(chatId, true, stream);
     },
-    [myId, myName, setupPeerConnection]
+    [myId, myName, setLocalStream, setupPeerConnection]
   );
 
   const acceptCall = useCallback(async () => {
@@ -161,23 +189,20 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     setLocalStream(stream);
 
-    supabase.channel(`user-calls:${callInfo.otherUserId}`).send({
-      type: "broadcast",
-      event: "call-accepted",
-      payload: { chatId: callInfo.chatId },
-    });
+    const acceptChannel = supabase.channel(`user-calls:${callInfo.otherUserId}`);
+    await acceptChannel.httpSend("call-accepted", { chatId: callInfo.chatId });
+    supabase.removeChannel(acceptChannel);
 
     setupPeerConnection(callInfo.chatId, false, stream);
-  }, [callInfo, setupPeerConnection]);
+  }, [callInfo, setLocalStream, setupPeerConnection]);
 
   const declineCall = useCallback(() => {
     if (callInfo) {
       const supabase = createSupabaseBrowserClient();
-      supabase.channel(`user-calls:${callInfo.otherUserId}`).send({
-        type: "broadcast",
-        event: "call-declined",
-        payload: { chatId: callInfo.chatId },
-      });
+      const declineChannel = supabase.channel(`user-calls:${callInfo.otherUserId}`);
+      declineChannel
+        .httpSend("call-declined", { chatId: callInfo.chatId })
+        .finally(() => supabase.removeChannel(declineChannel));
     }
     cleanup();
   }, [callInfo, cleanup]);
@@ -188,17 +213,19 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
   }, [cleanup]);
 
   const toggleMute = useCallback(() => {
-    localStream?.getAudioTracks().forEach((t) => (t.enabled = muted));
+    localStreamRef.current?.getAudioTracks().forEach((t) => (t.enabled = muted));
     setMuted((m) => !m);
-  }, [localStream, muted]);
+  }, [muted]);
 
   const toggleCamera = useCallback(() => {
-    localStream?.getVideoTracks().forEach((t) => (t.enabled = cameraOff));
+    localStreamRef.current?.getVideoTracks().forEach((t) => (t.enabled = cameraOff));
     setCameraOff((c) => !c);
-  }, [localStream, cameraOff]);
+  }, [cameraOff]);
 
   // Global listener: this user's own channel, for incoming call invites --
-  // active on every authenticated page, not just the Messages page.
+  // mounted once for the app's lifetime (active on every authenticated
+  // page, not just Messages), so everything it reads must come from refs
+  // or functional state updates, never a captured state variable.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
@@ -211,16 +238,17 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
         cleanup();
       })
       .on("broadcast", { event: "call-accepted" }, () => {
-        // Handled by setupPeerConnection's SUBSCRIBED callback for the caller.
+        calleeAcceptedRef.current = true;
+        if (pcRef.current && signalChannelRef.current) {
+          maybeSendOffer(pcRef.current, signalChannelRef.current);
+        }
       })
       .subscribe();
-    userChannelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myId]);
+  }, [myId, cleanup, maybeSendOffer]);
 
   return (
     <CallContext.Provider
