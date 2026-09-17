@@ -20,7 +20,7 @@ export default async function Home() {
         <>
           <p>Signed in as {user.email}</p>
           <p>
-            <a href="/profile">Go to my profile</a>
+            <a href="/profile">My Profile</a> · <a href="/discover">Discover</a>
           </p>
         </>
       ) : (
