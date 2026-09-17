@@ -136,6 +136,30 @@ export default function ProfileEditor({
     setMessage(updateError ? `Error: ${updateError.message}` : "Photo uploaded.");
   }
 
+  async function handlePhotoDelete(url: string) {
+    setMessage(null);
+    const supabase = createSupabaseBrowserClient();
+
+    // Extract the storage path from the public URL so the actual file
+    // gets removed too, not just the database reference to it.
+    const marker = "/profile-photos/";
+    const idx = url.indexOf(marker);
+    if (idx !== -1) {
+      const path = url.slice(idx + marker.length);
+      await supabase.storage.from("profile-photos").remove([path]);
+    }
+
+    const updatedPhotos = photos.filter((p) => p !== url);
+    setPhotos(updatedPhotos);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ photos: updatedPhotos })
+      .eq("user_id", userId);
+
+    setMessage(error ? `Error: ${error.message}` : "Photo deleted.");
+  }
+
   const inputClass =
     "mt-1 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-purple focus:outline-none";
 
@@ -275,15 +299,17 @@ export default function ProfileEditor({
       <h2 className="mt-8 font-display text-lg font-semibold text-foreground">Photos</h2>
       <div className="mt-3 flex flex-wrap gap-3">
         {photos.map((url) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={url}
-            src={url}
-            alt=""
-            width={100}
-            height={100}
-            className="h-24 w-24 rounded-lg object-cover"
-          />
+          <div key={url} className="group relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={url} alt="" width={100} height={100} className="h-24 w-24 rounded-lg object-cover" />
+            <button
+              onClick={() => handlePhotoDelete(url)}
+              className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white opacity-0 shadow group-hover:opacity-100"
+              aria-label="Delete photo"
+            >
+              ✕
+            </button>
+          </div>
         ))}
       </div>
       <input
