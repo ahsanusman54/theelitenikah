@@ -74,7 +74,7 @@ export default function UsersClient({
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
+    <main>
       <h1 className="font-display text-2xl font-bold text-foreground">User Management</h1>
       <p className="mt-1 text-sm text-foreground/60">{users.length} total members</p>
 
@@ -114,9 +114,10 @@ export default function UsersClient({
                       <img src={u.photos[0]} alt="" className="h-full w-full object-cover" />
                     ) : null}
                   </div>
-                  <span className="font-medium">
-                    {u.name || "Unnamed"} {u.user_id === myUserId && <span className="text-xs text-foreground/40">(you)</span>}
-                  </span>
+                  <a href={`/admin/users/${u.user_id}`} className="font-medium text-brand-purple hover:underline">
+                    {u.name || "Unnamed"}
+                  </a>
+                  {u.user_id === myUserId && <span className="text-xs text-foreground/40">(you)</span>}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">

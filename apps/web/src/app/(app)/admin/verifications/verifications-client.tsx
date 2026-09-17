@@ -35,7 +35,7 @@ export default function VerificationsClient({ initialRequests }: { initialReques
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main>
       <h1 className="font-display text-2xl font-bold text-foreground">Verification Requests</h1>
       <p className="mt-1 text-sm text-foreground/60">
         {requests.length} pending request{requests.length === 1 ? "" : "s"}
