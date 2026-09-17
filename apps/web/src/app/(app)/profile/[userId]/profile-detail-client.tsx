@@ -53,6 +53,7 @@ export default function ProfileDetailClient({
   isOnline,
   age,
   matchScore,
+  isLimitedProfile,
   maritalStatus,
   religiousPractice,
   willingToRelocate,
@@ -88,6 +89,7 @@ export default function ProfileDetailClient({
   isOnline: boolean;
   age: number | null;
   matchScore: number | null;
+  isLimitedProfile: boolean;
   maritalStatus: string | null;
   religiousPractice: string | null;
   willingToRelocate: boolean | null;
@@ -248,56 +250,70 @@ export default function ProfileDetailClient({
             </div>
           </div>
 
-          <div className="mt-8 border-t border-gray-100 pt-6">
-            <h3 className="font-display text-lg font-semibold text-foreground">About</h3>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Relationship Status" value={maritalStatus ? MARITAL_LABELS[maritalStatus] : null} />
-              <Field label="Country" value={country} />
-              <Field label="City" value={city} />
-              <Field label="Occupation" value={occupation} />
-              <Field label="Education" value={education} />
-              <Field label="Children" value={children ? CHILDREN_LABELS[children] : null} />
-              <Field label="Willing to relocate" value={willingToRelocate === null ? null : willingToRelocate ? "Yes" : "No"} />
+          {isLimitedProfile ? (
+            <div className="mt-8 border-t border-gray-100 pt-6 text-center">
+              <p className="text-3xl">🔒</p>
+              <h3 className="mt-2 font-display text-lg font-semibold text-foreground">
+                Full profile visible after you match
+              </h3>
+              <p className="mt-1 text-sm text-foreground/60">
+                {name || "This member"} has chosen to share their full profile only with people they&apos;ve matched with.
+              </p>
             </div>
-          </div>
-
-          <div className="mt-8 border-t border-gray-100 pt-6">
-            <h3 className="font-display text-lg font-semibold text-foreground">Base</h3>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Gender" value={gender ? GENDER_LABELS[gender] : null} />
-              <Field label="Languages" value={languages.length ? languages.join(", ") : null} />
-              <Field label="Religion" value={religion} />
-              <Field label="Religious practice" value={religiousPractice ? RELIGIOUS_PRACTICE_LABELS[religiousPractice] : null} />
-              <Field label="Drinks" value={drinks ? HABIT_LABELS[drinks] : null} />
-              <Field label="Smokes" value={smokes ? HABIT_LABELS[smokes] : null} />
-            </div>
-          </div>
-
-          {interests.length > 0 && (
-            <div className="mt-8 border-t border-gray-100 pt-6">
-              <h3 className="font-display text-lg font-semibold text-foreground">Interests &amp; Hobbies</h3>
-              <Field label="Interests" value={interests.join(", ")} />
-            </div>
-          )}
-
-          {sports.length > 0 && (
-            <div className="mt-8 border-t border-gray-100 pt-6">
-              <h3 className="font-display text-lg font-semibold text-foreground">Sport</h3>
-              <Field label="Sport" value={sports.join(", ")} />
-            </div>
-          )}
-
-          {(interestedInGender || preferredAgeMin || preferredAgeMax) && (
-            <div className="mt-8 border-t border-gray-100 pt-6">
-              <h3 className="font-display text-lg font-semibold text-foreground">What {name?.split(" ")[0] || "they"}&apos;re looking for</h3>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Interested in" value={interestedInGender ? GENDER_LABELS[interestedInGender] : null} />
-                <Field
-                  label="Age"
-                  value={preferredAgeMin || preferredAgeMax ? `${preferredAgeMin ?? "18"} to ${preferredAgeMax ?? "80"}` : null}
-                />
+          ) : (
+            <>
+              <div className="mt-8 border-t border-gray-100 pt-6">
+                <h3 className="font-display text-lg font-semibold text-foreground">About</h3>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Relationship Status" value={maritalStatus ? MARITAL_LABELS[maritalStatus] : null} />
+                  <Field label="Country" value={country} />
+                  <Field label="City" value={city} />
+                  <Field label="Occupation" value={occupation} />
+                  <Field label="Education" value={education} />
+                  <Field label="Children" value={children ? CHILDREN_LABELS[children] : null} />
+                  <Field label="Willing to relocate" value={willingToRelocate === null ? null : willingToRelocate ? "Yes" : "No"} />
+                </div>
               </div>
-            </div>
+
+              <div className="mt-8 border-t border-gray-100 pt-6">
+                <h3 className="font-display text-lg font-semibold text-foreground">Base</h3>
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Gender" value={gender ? GENDER_LABELS[gender] : null} />
+                  <Field label="Languages" value={languages.length ? languages.join(", ") : null} />
+                  <Field label="Religion" value={religion} />
+                  <Field label="Religious practice" value={religiousPractice ? RELIGIOUS_PRACTICE_LABELS[religiousPractice] : null} />
+                  <Field label="Drinks" value={drinks ? HABIT_LABELS[drinks] : null} />
+                  <Field label="Smokes" value={smokes ? HABIT_LABELS[smokes] : null} />
+                </div>
+              </div>
+
+              {interests.length > 0 && (
+                <div className="mt-8 border-t border-gray-100 pt-6">
+                  <h3 className="font-display text-lg font-semibold text-foreground">Interests &amp; Hobbies</h3>
+                  <Field label="Interests" value={interests.join(", ")} />
+                </div>
+              )}
+
+              {sports.length > 0 && (
+                <div className="mt-8 border-t border-gray-100 pt-6">
+                  <h3 className="font-display text-lg font-semibold text-foreground">Sport</h3>
+                  <Field label="Sport" value={sports.join(", ")} />
+                </div>
+              )}
+
+              {(interestedInGender || preferredAgeMin || preferredAgeMax) && (
+                <div className="mt-8 border-t border-gray-100 pt-6">
+                  <h3 className="font-display text-lg font-semibold text-foreground">What {name?.split(" ")[0] || "they"}&apos;re looking for</h3>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label="Interested in" value={interestedInGender ? GENDER_LABELS[interestedInGender] : null} />
+                    <Field
+                      label="Age"
+                      value={preferredAgeMin || preferredAgeMax ? `${preferredAgeMin ?? "18"} to ${preferredAgeMax ?? "80"}` : null}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <div className="mt-8 border-t border-gray-100 pt-4">

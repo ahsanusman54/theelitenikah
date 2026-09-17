@@ -74,7 +74,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 export default function SettingsClient({
   userId,
   email,
-  initialVisibility,
+  initialProfileVisibility,
   initialPhotoPrivacy,
   initialEmailPrefs,
   initialPushNotifications,
@@ -82,7 +82,7 @@ export default function SettingsClient({
 }: {
   userId: string;
   email: string;
-  initialVisibility: boolean;
+  initialProfileVisibility: "everyone" | "matches_only" | "only_me";
   initialPhotoPrivacy: boolean;
   initialEmailPrefs: EmailPrefs;
   initialPushNotifications: boolean;
@@ -105,7 +105,8 @@ export default function SettingsClient({
   const [emailMessage, setEmailMessage] = useState<string | null>(null);
 
   // Toggles
-  const [visibility, setVisibility] = useState(initialVisibility);
+  const [profileVisibility, setProfileVisibility] = useState(initialProfileVisibility);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [photoPrivacy, setPhotoPrivacy] = useState(initialPhotoPrivacy);
   const [emailPrefs, setEmailPrefs] = useState<EmailPrefs>(initialEmailPrefs);
   const [pushNotifications, setPushNotifications] = useState(initialPushNotifications);
@@ -194,6 +195,14 @@ export default function SettingsClient({
     const supabase = createSupabaseBrowserClient();
     await supabase.from("profiles").update({ [field]: value }).eq("user_id", userId);
     setToggleSaving(false);
+  }
+
+  async function updateProfileVisibility(value: "everyone" | "matches_only" | "only_me") {
+    setProfileVisibility(value);
+    setVisibilitySaving(true);
+    const supabase = createSupabaseBrowserClient();
+    await supabase.from("profiles").update({ profile_visibility: value }).eq("user_id", userId);
+    setVisibilitySaving(false);
   }
 
   async function updateEmailPref(key: keyof EmailPrefs, value: boolean) {
@@ -367,13 +376,36 @@ export default function SettingsClient({
           {tab === "visibility" && (
             <div>
               <h2 className="font-display text-lg font-semibold text-foreground">Profile Visibility</h2>
-              <p className="mt-2 text-sm text-foreground/60">
-                When off, your profile won&apos;t appear in Discover, Search, or Match for other members.
-              </p>
-              <label className="mt-4 flex items-center gap-3">
-                <Toggle checked={visibility} disabled={toggleSaving} onChange={() => updateProfileField("visibility", !visibility, setVisibility)} />
-                <span className="text-sm font-medium text-foreground/80">{visibility ? "Profile visible" : "Profile hidden"}</span>
-              </label>
+              <p className="mt-2 text-sm text-foreground/60">Choose who can view your profile.</p>
+
+              <div className="mt-4 flex flex-col gap-3">
+                {(
+                  [
+                    { value: "everyone", label: "Everyone", desc: "Any member can find and view your full profile." },
+                    { value: "matches_only", label: "Matches", desc: "Your card still appears in Discover, Search, and Match so people can still match with you — but your full profile details only unlock for people you've actually matched with." },
+                    { value: "only_me", label: "Only Me", desc: "Your profile is completely hidden — you won't appear in Discover, Search, or Match at all." },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${
+                      profileVisibility === opt.value ? "border-brand-purple bg-brand-purple/5" : "border-gray-200"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      className="mt-1"
+                      checked={profileVisibility === opt.value}
+                      disabled={visibilitySaving}
+                      onChange={() => updateProfileVisibility(opt.value)}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-foreground">{opt.label}</span>
+                      <span className="block text-xs text-foreground/60">{opt.desc}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
 

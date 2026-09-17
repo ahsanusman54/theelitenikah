@@ -18,7 +18,7 @@ export default async function ProfileDetailPage({
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "user_id, name, bio, photos, is_verified, is_premium, is_online, date_of_birth, marital_status, religious_practice, willing_to_relocate, children, drinks, smokes, gender, country, city, occupation, education, religion, languages, interests, sports, interested_in_gender, preferred_age_min, preferred_age_max, last_active_at, photo_privacy"
+      "user_id, name, bio, photos, is_verified, is_premium, is_online, date_of_birth, marital_status, religious_practice, willing_to_relocate, children, drinks, smokes, gender, country, city, occupation, education, religion, languages, interests, sports, interested_in_gender, preferred_age_min, preferred_age_max, last_active_at, photo_privacy, profile_visibility"
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -64,36 +64,42 @@ export default async function ProfileDetailPage({
   const matchScore = myProfile ? computeMatchScore(myProfile, profile) : null;
   const age = computeAge(profile.date_of_birth);
 
+  // "Matches only" visibility restricts the detail page, not Discover/
+  // Search listing -- see the migration notes for why (you must still be
+  // findable to ever become a match in the first place).
+  const isLimited = profile.profile_visibility === "matches_only" && !match && userId !== myId;
+
   return (
     <ProfileDetailClient
       myId={myId}
       userId={profile.user_id}
       name={profile.name}
-      bio={profile.bio}
+      bio={isLimited ? null : profile.bio}
       photos={profile.photo_privacy && !match ? [] : profile.photos ?? []}
       isVerified={profile.is_verified}
       isPremium={profile.is_premium}
       isOnline={profile.is_online}
       age={age}
       matchScore={matchScore}
-      maritalStatus={profile.marital_status}
-      religiousPractice={profile.religious_practice}
-      willingToRelocate={profile.willing_to_relocate}
-      children={profile.children}
-      drinks={profile.drinks}
-      smokes={profile.smokes}
-      gender={profile.gender}
-      country={profile.country}
-      city={profile.city}
-      occupation={profile.occupation}
-      education={profile.education}
-      religion={profile.religion}
-      languages={profile.languages ?? []}
-      interests={profile.interests ?? []}
-      sports={profile.sports ?? []}
-      interestedInGender={profile.interested_in_gender}
-      preferredAgeMin={profile.preferred_age_min}
-      preferredAgeMax={profile.preferred_age_max}
+      isLimitedProfile={isLimited}
+      maritalStatus={isLimited ? null : profile.marital_status}
+      religiousPractice={isLimited ? null : profile.religious_practice}
+      willingToRelocate={isLimited ? null : profile.willing_to_relocate}
+      children={isLimited ? null : profile.children}
+      drinks={isLimited ? null : profile.drinks}
+      smokes={isLimited ? null : profile.smokes}
+      gender={isLimited ? null : profile.gender}
+      country={isLimited ? null : profile.country}
+      city={isLimited ? null : profile.city}
+      occupation={isLimited ? null : profile.occupation}
+      education={isLimited ? null : profile.education}
+      religion={isLimited ? null : profile.religion}
+      languages={isLimited ? [] : profile.languages ?? []}
+      interests={isLimited ? [] : profile.interests ?? []}
+      sports={isLimited ? [] : profile.sports ?? []}
+      interestedInGender={isLimited ? null : profile.interested_in_gender}
+      preferredAgeMin={isLimited ? null : profile.preferred_age_min}
+      preferredAgeMax={isLimited ? null : profile.preferred_age_max}
       lastActiveAt={profile.last_active_at}
       myCreditBalance={myCredits?.balance ?? 0}
       alreadyLiked={!!existingLike}
