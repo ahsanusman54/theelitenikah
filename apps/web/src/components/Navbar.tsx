@@ -1,5 +1,6 @@
 import Link from "next/link";
 import NotificationBell from "./NotificationBell";
+import UserMenu from "./UserMenu";
 
 const NAV_LINKS = [
   { href: "/discover", label: "Discover" },
@@ -56,12 +57,7 @@ export default function Navbar({
           >
             Get more credits
           </Link>
-          <Link href="/profile" className="flex items-center gap-2 text-sm">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-purple font-semibold">
-              {displayName.charAt(0).toUpperCase()}
-            </span>
-            <span className="hidden sm:inline">{displayName}</span>
-          </Link>
+          <UserMenu displayName={displayName} />
         </div>
       </div>
     </header>
