@@ -16,9 +16,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name")
+    .select("name, role")
     .eq("user_id", user.id)
     .single();
+
+  const isAdmin = ["admin", "super_admin", "moderator"].includes(profile?.role ?? "");
 
   const { data: notifications } = await supabase
     .from("notifications")
@@ -35,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           userName={profile?.name ?? null}
           userEmail={user.email ?? ""}
           initialNotifications={notifications ?? []}
+          isAdmin={isAdmin}
         />
         <div className="flex-1 bg-background">{children}</div>
       </div>

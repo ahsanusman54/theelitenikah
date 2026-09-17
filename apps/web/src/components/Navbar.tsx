@@ -23,11 +23,13 @@ export default function Navbar({
   userName,
   userEmail,
   initialNotifications,
+  isAdmin,
 }: {
   userId: string;
   userName: string | null;
   userEmail: string;
   initialNotifications: NotificationRow[];
+  isAdmin: boolean;
 }) {
   const displayName = userName || userEmail.split("@")[0];
 
@@ -57,7 +59,7 @@ export default function Navbar({
           >
             Get more credits
           </Link>
-          <UserMenu displayName={displayName} />
+          <UserMenu displayName={displayName} isAdmin={isAdmin} />
         </div>
       </div>
     </header>

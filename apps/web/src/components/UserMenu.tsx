@@ -13,9 +13,13 @@ const MENU_ITEMS = [
   { href: "/credits", label: "My Credits", icon: "🪙" },
 ];
 
-export default function UserMenu({ displayName }: { displayName: string }) {
+export default function UserMenu({ displayName, isAdmin }: { displayName: string; isAdmin: boolean }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+
+  const items = isAdmin
+    ? [...MENU_ITEMS, { href: "/admin/verifications", label: "Verification Requests", icon: "🛡️" }]
+    : MENU_ITEMS;
 
   async function handleLogOut() {
     const supabase = createSupabaseBrowserClient();
@@ -37,7 +41,7 @@ export default function UserMenu({ displayName }: { displayName: string }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 bg-white py-2 text-foreground shadow-lg">
-            {MENU_ITEMS.map((item) => (
+            {items.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}

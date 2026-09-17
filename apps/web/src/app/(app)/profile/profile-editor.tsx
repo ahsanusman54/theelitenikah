@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import VerificationModal from "@/components/VerificationModal";
 
 const MARITAL_STATUS_OPTIONS = [
   { value: "never_married", label: "Never married" },
@@ -140,14 +141,14 @@ export default function ProfileEditor(props: Props) {
     setMessage(error ? `Error: ${error.message}` : "Saved.");
   }
 
-  async function handleRequestVerification() {
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  async function handleVerificationSubmitted() {
+    setShowVerificationModal(false);
     const supabase = createSupabaseBrowserClient();
     const now = new Date().toISOString();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ verification_requested_at: now })
-      .eq("user_id", userId);
-    if (!error) setVerificationRequestedAt(now);
+    await supabase.from("profiles").update({ verification_requested_at: now }).eq("user_id", userId);
+    setVerificationRequestedAt(now);
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -217,13 +218,21 @@ export default function ProfileEditor(props: Props) {
           </p>
         </div>
         <button
-          onClick={handleRequestVerification}
+          onClick={() => setShowVerificationModal(true)}
           disabled={!!verificationRequestedAt}
           className="rounded-full border border-gray-300 px-4 py-1.5 text-sm font-semibold text-foreground/70 hover:bg-gray-50 disabled:opacity-50"
         >
           {verificationRequestedAt ? "Requested" : "Request Verification"}
         </button>
       </div>
+
+      {showVerificationModal && (
+        <VerificationModal
+          userId={userId}
+          onClose={() => setShowVerificationModal(false)}
+          onSubmitted={handleVerificationSubmitted}
+        />
+      )}
 
       <form onSubmit={handleSave} className="flex flex-col gap-4">
         <div className={sectionClass}>
