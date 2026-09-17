@@ -1,0 +1,113 @@
+"use client";
+
+import { useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+
+export default function ProfileEditor({
+  userId,
+  initialName,
+  initialBio,
+  initialPhotos,
+}: {
+  userId: string;
+  initialName: string;
+  initialBio: string;
+  initialPhotos: string[];
+}) {
+  const [name, setName] = useState(initialName);
+  const [bio, setBio] = useState(initialBio);
+  const [photos, setPhotos] = useState<string[]>(initialPhotos);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ name, bio, photos })
+      .eq("user_id", userId);
+
+    setSaving(false);
+    setMessage(error ? `Error: ${error.message}` : "Saved.");
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setMessage(null);
+
+    const supabase = createSupabaseBrowserClient();
+    const path = `${userId}/${Date.now()}-${file.name}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("profile-photos")
+      .upload(path, file);
+
+    if (uploadError) {
+      setUploading(false);
+      setMessage(`Upload error: ${uploadError.message}`);
+      return;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("profile-photos").getPublicUrl(path);
+
+    const updatedPhotos = [...photos, publicUrl];
+    setPhotos(updatedPhotos);
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ photos: updatedPhotos })
+      .eq("user_id", userId);
+
+    setUploading(false);
+    setMessage(updateError ? `Error: ${updateError.message}` : "Photo uploaded.");
+  }
+
+  return (
+    <div>
+      <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <label>
+          Name
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={{ display: "block", width: "100%" }}
+          />
+        </label>
+        <label>
+          Bio
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            rows={4}
+            style={{ display: "block", width: "100%" }}
+          />
+        </label>
+        <button type="submit" disabled={saving}>
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </form>
+
+      <h2 style={{ marginTop: 32 }}>Photos</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {photos.map((url) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={url} src={url} alt="" width={100} height={100} style={{ objectFit: "cover" }} />
+        ))}
+      </div>
+      <input type="file" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} />
+
+      {message && <p style={{ marginTop: 12 }}>{message}</p>}
+    </div>
+  );
+}
