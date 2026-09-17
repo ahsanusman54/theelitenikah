@@ -16,6 +16,17 @@ const RELIGIOUS_PRACTICE_OPTIONS = [
   { value: "learning", label: "Learning" },
 ];
 
+const CHILDREN_OPTIONS = [
+  { value: "none", label: "No children" },
+  { value: "have_children", label: "Have children" },
+];
+
+const HABIT_OPTIONS = [
+  { value: "no", label: "No" },
+  { value: "occasionally", label: "Occasionally" },
+  { value: "yes", label: "Yes" },
+];
+
 export default function ProfileEditor({
   userId,
   initialName,
@@ -24,6 +35,12 @@ export default function ProfileEditor({
   initialMaritalStatus,
   initialReligiousPractice,
   initialWillingToRelocate,
+  initialDateOfBirth,
+  initialHeightCm,
+  initialWeightKg,
+  initialChildren,
+  initialDrinks,
+  initialSmokes,
 }: {
   userId: string;
   initialName: string;
@@ -32,6 +49,12 @@ export default function ProfileEditor({
   initialMaritalStatus: string;
   initialReligiousPractice: string;
   initialWillingToRelocate: boolean;
+  initialDateOfBirth: string;
+  initialHeightCm: string;
+  initialWeightKg: string;
+  initialChildren: string;
+  initialDrinks: string;
+  initialSmokes: string;
 }) {
   const [name, setName] = useState(initialName);
   const [bio, setBio] = useState(initialBio);
@@ -39,6 +62,12 @@ export default function ProfileEditor({
   const [maritalStatus, setMaritalStatus] = useState(initialMaritalStatus);
   const [religiousPractice, setReligiousPractice] = useState(initialReligiousPractice);
   const [willingToRelocate, setWillingToRelocate] = useState(initialWillingToRelocate);
+  const [dateOfBirth, setDateOfBirth] = useState(initialDateOfBirth);
+  const [heightCm, setHeightCm] = useState(initialHeightCm);
+  const [weightKg, setWeightKg] = useState(initialWeightKg);
+  const [children, setChildren] = useState(initialChildren);
+  const [drinks, setDrinks] = useState(initialDrinks);
+  const [smokes, setSmokes] = useState(initialSmokes);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,6 +87,12 @@ export default function ProfileEditor({
         marital_status: maritalStatus || null,
         religious_practice: religiousPractice || null,
         willing_to_relocate: willingToRelocate,
+        date_of_birth: dateOfBirth || null,
+        height_cm: heightCm ? Number(heightCm) : null,
+        weight_kg: weightKg ? Number(weightKg) : null,
+        children: children || null,
+        drinks: drinks || null,
+        smokes: smokes || null,
       })
       .eq("user_id", userId);
 
@@ -163,6 +198,71 @@ export default function ProfileEditor({
           />
           Willing to relocate
         </label>
+
+        <label className="text-sm font-medium text-foreground/80">
+          Date of birth
+          <input
+            type="date"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+            className={inputClass}
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm font-medium text-foreground/80">
+            Height (cm)
+            <input
+              type="number"
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+              className={inputClass}
+            />
+          </label>
+          <label className="text-sm font-medium text-foreground/80">
+            Weight (kg)
+            <input
+              type="number"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              className={inputClass}
+            />
+          </label>
+        </div>
+        <label className="text-sm font-medium text-foreground/80">
+          Children
+          <select value={children} onChange={(e) => setChildren(e.target.value)} className={inputClass}>
+            <option value="">Select...</option>
+            {CHILDREN_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm font-medium text-foreground/80">
+            Drinks
+            <select value={drinks} onChange={(e) => setDrinks(e.target.value)} className={inputClass}>
+              <option value="">Select...</option>
+              {HABIT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-foreground/80">
+            Smokes
+            <select value={smokes} onChange={(e) => setSmokes(e.target.value)} className={inputClass}>
+              <option value="">Select...</option>
+              {HABIT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <button
           type="submit"
           disabled={saving}

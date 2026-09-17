@@ -1,4 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import DiscoverClient, { type Candidate } from "./discover-client";
+import { computeMatchScore } from "./match-score";
 
 export default async function DiscoverPage() {
   const supabase = await createSupabaseServerClient();
@@ -8,17 +10,55 @@ export default async function DiscoverPage() {
 
   const { data: myProfile } = await supabase
     .from("profiles")
-    .select("name, photos")
+    .select(
+      "name, photos, marital_status, religious_practice, willing_to_relocate, children, drinks, smokes"
+    )
     .eq("user_id", user!.id)
     .single();
 
+  // Exclude anyone this user has already liked or passed on. We only record
+  // "likes" in the DB (see discover-client.tsx), so this list is people
+  // already acted on -- reject isn't persisted, just skipped client-side.
+  const { data: alreadyLiked } = await supabase
+    .from("likes")
+    .select("to_user")
+    .eq("from_user", user!.id);
+  const excludeIds = new Set((alreadyLiked ?? []).map((l) => l.to_user));
+  excludeIds.add(user!.id);
+
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("user_id, name, bio, photos, marital_status, religious_practice")
-    .neq("user_id", user!.id)
-    .limit(20);
+    .select(
+      "user_id, name, bio, photos, is_verified, is_premium, date_of_birth, height_cm, weight_kg, children, drinks, smokes, marital_status, religious_practice, willing_to_relocate"
+    )
+    .limit(50);
 
-  const candidate = profiles?.[0];
+  const candidates: Candidate[] = (profiles ?? [])
+    .filter((p) => !excludeIds.has(p.user_id))
+    .map((p) => ({
+      user_id: p.user_id,
+      name: p.name,
+      bio: p.bio,
+      photos: p.photos,
+      is_verified: p.is_verified,
+      is_premium: p.is_premium,
+      date_of_birth: p.date_of_birth,
+      height_cm: p.height_cm,
+      weight_kg: p.weight_kg,
+      children: p.children,
+      drinks: p.drinks,
+      smokes: p.smokes,
+      matchScore: myProfile
+        ? computeMatchScore(myProfile, {
+            marital_status: p.marital_status,
+            religious_practice: p.religious_practice,
+            willing_to_relocate: p.willing_to_relocate,
+            children: p.children,
+            drinks: p.drinks,
+            smokes: p.smokes,
+          })
+        : null,
+    }));
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
@@ -27,48 +67,7 @@ export default async function DiscoverPage() {
       {error && <p className="mt-4 text-red-600">Error loading profiles: {error.message}</p>}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_300px]">
-        {candidate ? (
-          <div className="flex flex-col gap-6 rounded-2xl bg-white p-6 shadow-sm sm:flex-row">
-            <div className="h-72 w-full flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:w-64">
-              {candidate.photos?.[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={candidate.photos[0]} alt={candidate.name ?? ""} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center text-gray-400">No photo</div>
-              )}
-            </div>
-            <div className="flex-1">
-              <h2 className="font-display text-2xl font-bold text-foreground">
-                {candidate.name || "Unnamed"}
-              </h2>
-              <div className="mt-2 flex gap-3 text-sm text-foreground/60">
-                {candidate.marital_status && <span>{candidate.marital_status.replace("_", " ")}</span>}
-                {candidate.religious_practice && <span>{candidate.religious_practice.replace("_", " ")}</span>}
-              </div>
-              <p className="mt-4 text-foreground/80">{candidate.bio || "No bio yet."}</p>
-
-              <div className="mt-6 flex gap-3">
-                <button className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 text-xl hover:bg-gray-50">
-                  ✕
-                </button>
-                <button className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-pink text-xl text-white hover:bg-brand-pink-dark">
-                  ♥
-                </button>
-                <button className="flex h-12 w-12 items-center justify-center rounded-full border border-brand-purple text-brand-purple text-xl hover:bg-brand-purple hover:text-white">
-                  ★
-                </button>
-              </div>
-
-              <button className="mt-6 rounded-full bg-brand-purple px-6 py-2.5 font-semibold text-white hover:bg-brand-purple-light">
-                Send message for free
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-2xl bg-white p-10 text-center text-foreground/60 shadow-sm">
-            No other profiles yet. Once more people sign up, they&apos;ll show up here.
-          </div>
-        )}
+        <DiscoverClient candidates={candidates} />
 
         <aside className="flex flex-col gap-6">
           <div className="rounded-2xl bg-white p-4 text-center shadow-sm">

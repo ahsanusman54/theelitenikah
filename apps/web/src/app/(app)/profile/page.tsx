@@ -9,7 +9,9 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, bio, photos, marital_status, religious_practice, willing_to_relocate")
+    .select(
+      "name, bio, photos, marital_status, religious_practice, willing_to_relocate, date_of_birth, height_cm, weight_kg, children, drinks, smokes"
+    )
     .eq("user_id", user!.id)
     .single();
 
@@ -25,6 +27,12 @@ export default async function ProfilePage() {
           initialMaritalStatus={profile?.marital_status ?? ""}
           initialReligiousPractice={profile?.religious_practice ?? ""}
           initialWillingToRelocate={profile?.willing_to_relocate ?? false}
+          initialDateOfBirth={profile?.date_of_birth ?? ""}
+          initialHeightCm={profile?.height_cm?.toString() ?? ""}
+          initialWeightKg={profile?.weight_kg?.toString() ?? ""}
+          initialChildren={profile?.children ?? ""}
+          initialDrinks={profile?.drinks ?? ""}
+          initialSmokes={profile?.smokes ?? ""}
         />
       </div>
     </main>
