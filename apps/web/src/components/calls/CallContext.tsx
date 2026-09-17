@@ -10,6 +10,7 @@ type CallInfo = {
   chatId: string;
   otherUserId: string;
   otherName: string;
+  withVideo: boolean;
 };
 
 type CallContextValue = {
@@ -19,7 +20,7 @@ type CallContextValue = {
   remoteStream: MediaStream | null;
   muted: boolean;
   cameraOff: boolean;
-  startCall: (chatId: string, otherUserId: string, otherName: string) => void;
+  startCall: (chatId: string, otherUserId: string, otherName: string, withVideo: boolean) => void;
   acceptCall: () => void;
   declineCall: () => void;
   hangUp: () => void;
@@ -158,22 +159,23 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
   );
 
   const startCall = useCallback(
-    async (chatId: string, otherUserId: string, otherName: string) => {
+    async (chatId: string, otherUserId: string, otherName: string, withVideo: boolean) => {
       const supabase = createSupabaseBrowserClient();
-      setCallInfo({ chatId, otherUserId, otherName });
+      setCallInfo({ chatId, otherUserId, otherName, withVideo });
       setStatus("outgoing");
       signalReadyRef.current = false;
       calleeAcceptedRef.current = false;
       offerSentRef.current = false;
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: withVideo, audio: true });
       setLocalStream(stream);
+      setCameraOff(!withVideo);
 
       // One-off signal, not a lasting subscription: httpSend() delivers via
       // REST without needing .subscribe() first, and we remove the channel
       // right after so it doesn't linger in the client's channel registry.
       const inviteChannel = supabase.channel(`user-calls:${otherUserId}`);
-      await inviteChannel.httpSend("call-invite", { chatId, callerId: myId, callerName: myName });
+      await inviteChannel.httpSend("call-invite", { chatId, callerId: myId, callerName: myName, withVideo });
       supabase.removeChannel(inviteChannel);
 
       // Subscribes immediately so we're ready the moment the callee
@@ -186,8 +188,9 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
   const acceptCall = useCallback(async () => {
     if (!callInfo) return;
     const supabase = createSupabaseBrowserClient();
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: callInfo.withVideo, audio: true });
     setLocalStream(stream);
+    setCameraOff(!callInfo.withVideo);
 
     const acceptChannel = supabase.channel(`user-calls:${callInfo.otherUserId}`);
     await acceptChannel.httpSend("call-accepted", { chatId: callInfo.chatId });
@@ -231,7 +234,12 @@ export function CallProvider({ myId, myName, children }: { myId: string; myName:
     const channel = supabase
       .channel(`user-calls:${myId}`)
       .on("broadcast", { event: "call-invite" }, ({ payload }) => {
-        setCallInfo({ chatId: payload.chatId, otherUserId: payload.callerId, otherName: payload.callerName });
+        setCallInfo({
+          chatId: payload.chatId,
+          otherUserId: payload.callerId,
+          otherName: payload.callerName,
+          withVideo: payload.withVideo,
+        });
         setStatus("incoming");
       })
       .on("broadcast", { event: "call-declined" }, () => {

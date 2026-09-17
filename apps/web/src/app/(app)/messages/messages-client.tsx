@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useCall } from "@/components/calls/CallContext";
+import EmojiPicker from "@/components/EmojiPicker";
 
 export type Conversation = {
   chatId: string;
@@ -13,15 +14,20 @@ export type Conversation = {
   lastMessageAt: string | null;
 };
 
+type MessageType = "text" | "voice" | "image" | "video" | "file";
+
 type Message = {
   id: string;
   chat_id: string;
   sender_id: string;
   content: string;
-  message_type: "text" | "voice";
+  message_type: MessageType;
   duration_seconds: number | null;
+  file_name: string | null;
   sent_at: string;
 };
+
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25MB
 
 function formatDate(iso: string | null) {
   if (!iso) return "";
@@ -29,9 +35,8 @@ function formatDate(iso: string | null) {
   return d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function VoiceMessage({ path, duration, mine }: { path: string; duration: number | null; mine: boolean }) {
+function useSignedUrl(path: string) {
   const [url, setUrl] = useState<string | null>(null);
-
   useEffect(() => {
     let cancelled = false;
     const supabase = createSupabaseBrowserClient();
@@ -45,16 +50,45 @@ function VoiceMessage({ path, duration, mine }: { path: string; duration: number
       cancelled = true;
     };
   }, [path]);
+  return url;
+}
 
+function VoiceMessage({ path, duration }: { path: string; duration: number | null }) {
+  const url = useSignedUrl(path);
   return (
-    <div className={`flex items-center gap-2 ${mine ? "flex-row-reverse" : ""}`}>
-      {url ? (
-        <audio controls src={url} className="h-9 max-w-[220px]" />
-      ) : (
-        <span className="text-xs opacity-70">Loading voice note...</span>
-      )}
+    <div className="flex items-center gap-2">
+      {url ? <audio controls src={url} className="h-9 max-w-[220px]" /> : <span className="text-xs opacity-70">Loading...</span>}
       {duration !== null && <span className="text-xs opacity-70">{duration}s</span>}
     </div>
+  );
+}
+
+function ImageMessage({ path }: { path: string }) {
+  const url = useSignedUrl(path);
+  if (!url) return <span className="text-xs opacity-70">Loading image...</span>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className="max-h-64 max-w-full rounded-lg object-cover" />;
+}
+
+function VideoMessage({ path }: { path: string }) {
+  const url = useSignedUrl(path);
+  if (!url) return <span className="text-xs opacity-70">Loading video...</span>;
+  return <video controls src={url} className="max-h-64 max-w-full rounded-lg" />;
+}
+
+function FileMessage({ path, fileName }: { path: string; fileName: string | null }) {
+  const url = useSignedUrl(path);
+  return (
+    <a
+      href={url ?? undefined}
+      download={fileName ?? undefined}
+      className="flex items-center gap-2 underline"
+      onClick={(e) => {
+        if (!url) e.preventDefault();
+      }}
+    >
+      📎 {fileName || "Attachment"}
+    </a>
   );
 }
 
@@ -80,10 +114,15 @@ export default function MessagesClient({
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [uploadingVoice, setUploadingVoice] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   const selectedConversation = conversations.find((c) => c.chatId === selectedChatId) ?? null;
 
@@ -102,7 +141,7 @@ export default function MessagesClient({
 
     supabase
       .from("messages")
-      .select("id, chat_id, sender_id, content, message_type, duration_seconds, sent_at")
+      .select("id, chat_id, sender_id, content, message_type, duration_seconds, file_name, sent_at")
       .eq("chat_id", selectedChatId)
       .order("sent_at", { ascending: true })
       .then(({ data }) => {
@@ -207,6 +246,44 @@ export default function MessagesClient({
     setRecording(false);
   }
 
+  async function handleAttachment(e: React.ChangeEvent<HTMLInputElement>, kind: "media" | "file") {
+    const file = e.target.files?.[0];
+    if (!file || !selectedChatId) return;
+    setAttachError(null);
+
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachError("That file is over 25MB. Please choose a smaller one.");
+      e.target.value = "";
+      return;
+    }
+
+    const messageType: MessageType = kind === "file" ? "file" : file.type.startsWith("video/") ? "video" : "image";
+
+    setUploadingAttachment(true);
+    const supabase = createSupabaseBrowserClient();
+    const path = `${selectedChatId}/${myId}/${Date.now()}-${file.name}`;
+
+    const { error: uploadError } = await supabase.storage.from("chat-media").upload(path, file);
+    if (uploadError) {
+      setAttachError(uploadError.message);
+    } else {
+      await supabase.from("messages").insert({
+        chat_id: selectedChatId,
+        sender_id: myId,
+        content: path,
+        message_type: messageType,
+        file_name: file.name,
+      });
+    }
+    setUploadingAttachment(false);
+    e.target.value = "";
+  }
+
+  function insertEmoji(emoji: string) {
+    setDraft((d) => d + emoji);
+    textInputRef.current?.focus();
+  }
+
   async function toggleOnline() {
     const next = !isOnline;
     setIsOnline(next);
@@ -292,7 +369,17 @@ export default function MessagesClient({
                 <div className="flex gap-2">
                   <button
                     onClick={() =>
-                      startCall(selectedConversation.chatId, selectedConversation.otherUserId, selectedConversation.otherName)
+                      startCall(selectedConversation.chatId, selectedConversation.otherUserId, selectedConversation.otherName, false)
+                    }
+                    title="Voice call"
+                    aria-label={`Voice call ${selectedConversation.otherName}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-purple text-white hover:bg-brand-purple-light"
+                  >
+                    📞
+                  </button>
+                  <button
+                    onClick={() =>
+                      startCall(selectedConversation.chatId, selectedConversation.otherUserId, selectedConversation.otherName, true)
                     }
                     title="Video call"
                     aria-label={`Video call ${selectedConversation.otherName}`}
@@ -313,17 +400,18 @@ export default function MessagesClient({
                         : "bg-gray-100 text-foreground"
                     }`}
                   >
-                    {m.message_type === "voice" ? (
-                      <VoiceMessage path={m.content} duration={m.duration_seconds} mine={m.sender_id === myId} />
-                    ) : (
-                      m.content
-                    )}
+                    {m.message_type === "voice" && <VoiceMessage path={m.content} duration={m.duration_seconds} />}
+                    {m.message_type === "image" && <ImageMessage path={m.content} />}
+                    {m.message_type === "video" && <VideoMessage path={m.content} />}
+                    {m.message_type === "file" && <FileMessage path={m.content} fileName={m.file_name} />}
+                    {m.message_type === "text" && m.content}
                   </div>
                 ))}
                 <div ref={messagesEndRef} />
               </div>
 
               <div className="border-t border-gray-100 p-3">
+                {attachError && <p className="mb-2 text-xs text-red-600">{attachError}</p>}
                 {recording ? (
                   <div className="flex items-center gap-3 rounded-full border border-red-200 bg-red-50 px-4 py-2">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
@@ -339,14 +427,36 @@ export default function MessagesClient({
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={sendMessage} className="flex gap-2">
+                  <form onSubmit={sendMessage} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingAttachment}
+                      title="Attach a file"
+                      aria-label="Attach a file"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      📎
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => mediaInputRef.current?.click()}
+                      disabled={uploadingAttachment}
+                      title="Share a photo or video"
+                      aria-label="Share a photo or video"
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      🖼️
+                    </button>
                     <input
                       type="text"
+                      ref={textInputRef}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       placeholder="Type a message..."
                       className="flex-1 rounded-full border border-gray-200 px-4 py-2 text-sm focus:border-brand-purple focus:outline-none"
                     />
+                    <EmojiPicker onSelect={insertEmoji} />
                     <button
                       type="button"
                       onClick={startRecording}
@@ -364,6 +474,20 @@ export default function MessagesClient({
                     >
                       Send
                     </button>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => handleAttachment(e, "file")}
+                    />
+                    <input
+                      ref={mediaInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      className="hidden"
+                      onChange={(e) => handleAttachment(e, "media")}
+                    />
                   </form>
                 )}
               </div>
