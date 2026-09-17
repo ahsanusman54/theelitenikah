@@ -54,10 +54,13 @@ export default function SettingsClient({
   const [tab, setTab] = useState<TabKey>("general");
 
   // General (password)
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [resetSending, setResetSending] = useState(false);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   // Email
   const [newEmail, setNewEmail] = useState("");
@@ -81,6 +84,10 @@ export default function SettingsClient({
   async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault();
     setPasswordMessage(null);
+    if (!currentPassword) {
+      setPasswordMessage("Enter your current password to confirm this change.");
+      return;
+    }
     if (newPassword.length < 6) {
       setPasswordMessage("Password must be at least 6 characters.");
       return;
@@ -91,15 +98,44 @@ export default function SettingsClient({
     }
     setPasswordSaving(true);
     const supabase = createSupabaseBrowserClient();
+
+    // Re-verify identity with the current password before allowing the
+    // change -- protects against someone with just an open, unattended
+    // session (e.g. a shared computer) being able to lock the real owner
+    // out by changing the password without knowing it.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      setPasswordSaving(false);
+      setPasswordMessage("Current password is incorrect.");
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setPasswordSaving(false);
     if (error) {
       setPasswordMessage(`Error: ${error.message}`);
     } else {
       setPasswordMessage("Password updated.");
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     }
+  }
+
+  async function handleForgotPassword() {
+    setResetSending(true);
+    setResetMessage(null);
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/settings`,
+    });
+    setResetSending(false);
+    setResetMessage(
+      error ? `Error: ${error.message}` : "Password reset link sent — check your email."
+    );
   }
 
   async function handleEmailChange(e: React.FormEvent) {
@@ -221,18 +257,37 @@ export default function SettingsClient({
           {tab === "general" && (
             <form onSubmit={handlePasswordChange} className="flex flex-col gap-4">
               <h2 className="font-display text-lg font-semibold text-foreground">General</h2>
-              <p className="text-sm text-foreground/60">Signed in as {email}</p>
+
               <label className="text-sm font-medium text-foreground/80">
-                New password
+                Current Password <span className="font-normal text-foreground/50">(required to update email or change current password)</span>
+                <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={inputClass} />
+              </label>
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetSending}
+                className="-mt-2 self-start text-sm text-brand-purple underline disabled:opacity-60"
+              >
+                {resetSending ? "Sending..." : "Lost your password?"}
+              </button>
+              {resetMessage && <p className="text-sm text-foreground/70">{resetMessage}</p>}
+
+              <label className="text-sm font-medium text-foreground/80">
+                Account Email
+                <input type="email" value={email} disabled className={`${inputClass} bg-gray-50 text-foreground/50`} />
+              </label>
+
+              <label className="text-sm font-medium text-foreground/80">
+                Change Password <span className="font-normal text-foreground/50">(leave blank for no change)</span>
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} className={inputClass} />
               </label>
               <label className="text-sm font-medium text-foreground/80">
-                Repeat new password
+                Repeat New Password
                 <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={6} className={inputClass} />
               </label>
               {passwordMessage && <p className="text-sm text-foreground/70">{passwordMessage}</p>}
               <button type="submit" disabled={passwordSaving || !newPassword} className="self-start rounded-full bg-brand-pink px-6 py-2.5 font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-60">
-                {passwordSaving ? "Saving..." : "Change password"}
+                {passwordSaving ? "Saving..." : "Save Changes"}
               </button>
             </form>
           )}
