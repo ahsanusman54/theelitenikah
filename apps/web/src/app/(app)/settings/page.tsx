@@ -10,7 +10,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("visibility, photo_privacy, email_notifications_enabled, push_notifications_enabled")
+    .select("visibility, photo_privacy, email_notification_prefs, push_notifications_enabled")
     .eq("user_id", myId)
     .single();
 
@@ -34,7 +34,9 @@ export default async function SettingsPage() {
       email={user!.email ?? ""}
       initialVisibility={profile?.visibility ?? true}
       initialPhotoPrivacy={profile?.photo_privacy ?? false}
-      initialEmailNotifications={profile?.email_notifications_enabled ?? true}
+      initialEmailPrefs={
+        profile?.email_notification_prefs ?? { like: true, super_like: true, match: true, view: true }
+      }
       initialPushNotifications={profile?.push_notifications_enabled ?? true}
       initialBlocked={blocked}
     />

@@ -10,6 +10,13 @@ export type BlockedProfile = {
   photo: string | null;
 };
 
+export type EmailPrefs = {
+  like: boolean;
+  super_like: boolean;
+  match: boolean;
+  view: boolean;
+};
+
 type TabKey =
   | "general"
   | "email"
@@ -21,6 +28,36 @@ type TabKey =
   | "removed"
   | "emailNotifications"
   | "pushNotifications";
+
+function YesNoRow({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <span className="text-sm text-foreground/80">{label}</span>
+      <div className="flex gap-6">
+        {[true, false].map((option) => (
+          <label key={String(option)} className="flex items-center gap-1.5 text-xs text-foreground/60">
+            <input
+              type="radio"
+              checked={value === option}
+              disabled={disabled}
+              onChange={() => onChange(option)}
+            />
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: () => void; disabled?: boolean }) {
   return (
@@ -39,7 +76,7 @@ export default function SettingsClient({
   email,
   initialVisibility,
   initialPhotoPrivacy,
-  initialEmailNotifications,
+  initialEmailPrefs,
   initialPushNotifications,
   initialBlocked,
 }: {
@@ -47,7 +84,7 @@ export default function SettingsClient({
   email: string;
   initialVisibility: boolean;
   initialPhotoPrivacy: boolean;
-  initialEmailNotifications: boolean;
+  initialEmailPrefs: EmailPrefs;
   initialPushNotifications: boolean;
   initialBlocked: BlockedProfile[];
 }) {
@@ -70,7 +107,7 @@ export default function SettingsClient({
   // Toggles
   const [visibility, setVisibility] = useState(initialVisibility);
   const [photoPrivacy, setPhotoPrivacy] = useState(initialPhotoPrivacy);
-  const [emailNotifications, setEmailNotifications] = useState(initialEmailNotifications);
+  const [emailPrefs, setEmailPrefs] = useState<EmailPrefs>(initialEmailPrefs);
   const [pushNotifications, setPushNotifications] = useState(initialPushNotifications);
   const [toggleSaving, setToggleSaving] = useState(false);
 
@@ -156,6 +193,15 @@ export default function SettingsClient({
     setToggleSaving(true);
     const supabase = createSupabaseBrowserClient();
     await supabase.from("profiles").update({ [field]: value }).eq("user_id", userId);
+    setToggleSaving(false);
+  }
+
+  async function updateEmailPref(key: keyof EmailPrefs, value: boolean) {
+    const updated = { ...emailPrefs, [key]: value };
+    setEmailPrefs(updated);
+    setToggleSaving(true);
+    const supabase = createSupabaseBrowserClient();
+    await supabase.from("profiles").update({ email_notification_prefs: updated }).eq("user_id", userId);
     setToggleSaving(false);
   }
 
@@ -402,15 +448,55 @@ export default function SettingsClient({
             <div>
               <h2 className="font-display text-lg font-semibold text-foreground">Email notifications</h2>
               <p className="mt-2 rounded-lg bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                No email provider is connected yet, so no emails send from this toggle right now — but
-                your preference is saved for real, and will take effect as soon as email is wired in.
+                No email provider is connected yet, so no emails actually send from these yet — but
+                every preference below is saved for real, and takes effect the moment email is wired in.
               </p>
-              <label className="mt-4 flex items-center gap-3">
-                <Toggle checked={emailNotifications} disabled={toggleSaving} onChange={() => updateProfileField("email_notifications_enabled", !emailNotifications, setEmailNotifications)} />
-                <span className="text-sm font-medium text-foreground/80">
-                  {emailNotifications ? "Email notifications on" : "Email notifications off"}
-                </span>
-              </label>
+              <p className="mt-4 text-sm text-foreground/60">Send an email notice when:</p>
+
+              <div className="mt-3">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-1">
+                  <span className="text-sm font-semibold text-foreground">Activity</span>
+                  <div className="flex gap-6 text-xs font-semibold text-foreground/50">
+                    <span>Yes</span>
+                    <span>No</span>
+                  </div>
+                </div>
+                <YesNoRow
+                  label="Someone likes your profile"
+                  value={emailPrefs.like}
+                  disabled={toggleSaving}
+                  onChange={(v) => updateEmailPref("like", v)}
+                />
+                <YesNoRow
+                  label="Someone super-likes your profile"
+                  value={emailPrefs.super_like}
+                  disabled={toggleSaving}
+                  onChange={(v) => updateEmailPref("super_like", v)}
+                />
+                <YesNoRow
+                  label="Someone views your profile"
+                  value={emailPrefs.view}
+                  disabled={toggleSaving}
+                  onChange={(v) => updateEmailPref("view", v)}
+                />
+              </div>
+
+              <div className="mt-6">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-1">
+                  <span className="text-sm font-semibold text-foreground">Matches</span>
+                </div>
+                <YesNoRow
+                  label="You get a new match"
+                  value={emailPrefs.match}
+                  disabled={toggleSaving}
+                  onChange={(v) => updateEmailPref("match", v)}
+                />
+              </div>
+
+              <p className="mt-6 text-xs text-foreground/40">
+                Groups notifications aren&apos;t listed here — Groups/Forums isn&apos;t a built feature
+                in this app yet, so there&apos;s nothing real for a toggle like that to control.
+              </p>
             </div>
           )}
 
