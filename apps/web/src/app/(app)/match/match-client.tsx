@@ -2,12 +2,14 @@
 
 import { useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import StoryViewer from "./story-viewer";
 
 export type StoryEntry = {
   storyId: string;
   userId: string;
   name: string;
   photoUrl: string;
+  mediaType: "image" | "video";
   isMine: boolean;
 };
 
@@ -19,6 +21,24 @@ export type MatchProfile = {
 };
 
 type SortOption = "recent" | "name";
+
+const MAX_VIDEO_SECONDS = 10;
+
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error("Could not read video metadata"));
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
 
 export default function MatchClient({
   myId,
@@ -37,21 +57,47 @@ export default function MatchClient({
   const [matches] = useState(initialMatches);
   const [sort, setSort] = useState<SortOption>("recent");
   const [uploadingStory, setUploadingStory] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const myStory = stories.find((s) => s.isMine);
+  // Rendered order: mine first (if any), then everyone else -- this is also
+  // the order the full-screen viewer advances through.
+  const orderedStories = [
+    ...(myStory ? [myStory] : []),
+    ...stories.filter((s) => !s.isMine),
+  ];
 
   async function handleAddStory(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setUploadError(null);
+
+    const isVideo = file.type.startsWith("video/");
+    if (isVideo) {
+      try {
+        const duration = await getVideoDuration(file);
+        if (duration > MAX_VIDEO_SECONDS) {
+          setUploadError(`Videos must be ${MAX_VIDEO_SECONDS} seconds or shorter.`);
+          e.target.value = "";
+          return;
+        }
+      } catch {
+        setUploadError("Couldn't read that video file. Try a different one.");
+        e.target.value = "";
+        return;
+      }
+    }
 
     setUploadingStory(true);
     const supabase = createSupabaseBrowserClient();
     const path = `${myId}/stories/${Date.now()}-${file.name}`;
 
-    const { error: uploadError } = await supabase.storage.from("profile-photos").upload(path, file);
-    if (uploadError) {
+    const { error: uploadErr } = await supabase.storage.from("profile-photos").upload(path, file);
+    if (uploadErr) {
       setUploadingStory(false);
+      setUploadError(uploadErr.message);
       return;
     }
 
@@ -59,26 +105,39 @@ export default function MatchClient({
       data: { publicUrl },
     } = supabase.storage.from("profile-photos").getPublicUrl(path);
 
+    const mediaType = isVideo ? "video" : "image";
     const { data: story, error } = await supabase
       .from("stories")
-      .insert({ user_id: myId, photo_url: publicUrl })
-      .select("id, user_id, photo_url")
+      .insert({ user_id: myId, photo_url: publicUrl, media_type: mediaType })
+      .select("id, user_id, photo_url, media_type")
       .single();
 
     setUploadingStory(false);
-    if (!error && story) {
+    e.target.value = "";
+
+    if (error) {
+      setUploadError(error.message);
+      return;
+    }
+    if (story) {
       setStories((prev) => [
-        { storyId: story.id, userId: myId, name: myName, photoUrl: story.photo_url, isMine: true },
+        {
+          storyId: story.id,
+          userId: myId,
+          name: myName,
+          photoUrl: story.photo_url,
+          mediaType: story.media_type,
+          isMine: true,
+        },
         ...prev.filter((s) => !s.isMine),
       ]);
     }
   }
 
-  async function handleDeleteStory() {
-    if (!myStory) return;
+  async function handleDeleteStory(storyId: string) {
     const supabase = createSupabaseBrowserClient();
-    await supabase.from("stories").delete().eq("id", myStory.storyId);
-    setStories((prev) => prev.filter((s) => s.storyId !== myStory.storyId));
+    await supabase.from("stories").delete().eq("id", storyId);
+    setStories((prev) => prev.filter((s) => s.storyId !== storyId));
   }
 
   const sortedMatches = [...matches].sort((a, b) =>
@@ -91,27 +150,44 @@ export default function MatchClient({
       <div className="flex gap-4 overflow-x-auto pb-2">
         <div className="flex flex-shrink-0 flex-col items-center gap-1">
           <button
-            onClick={() => (myStory ? handleDeleteStory() : fileInputRef.current?.click())}
+            onClick={() => (myStory ? setViewerIndex(0) : fileInputRef.current?.click())}
             disabled={uploadingStory}
-            className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-brand-pink bg-gray-100"
-            title={myStory ? "Click to remove your story" : "Add a story"}
+            className="relative h-16 w-16 overflow-hidden rounded-full border-2 border-brand-pink bg-gray-100 transition-transform hover:scale-105"
+            title={myStory ? "View your story" : "Add a story"}
           >
             {myStory ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={myStory.photoUrl} alt="" className="h-full w-full object-cover" />
+              myStory.mediaType === "video" ? (
+                <video src={myStory.photoUrl} className="h-full w-full object-cover" muted />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={myStory.photoUrl} alt="" className="h-full w-full object-cover" />
+              )
             ) : myPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={myPhoto} alt="" className="h-full w-full object-cover" />
             ) : null}
-            <span className="absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full bg-brand-pink text-xs text-white">
-              {myStory ? "✕" : "+"}
-            </span>
+            {uploadingStory && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-xs text-white">
+                ...
+              </span>
+            )}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            disabled={uploadingStory}
+            className="-mt-4 ml-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-brand-pink text-xs font-bold text-white shadow"
+            title="Add a new story"
+          >
+            +
           </button>
           <span className="text-xs text-foreground/70">{myStory ? "Your story" : "Add story"}</span>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/*"
             className="hidden"
             onChange={handleAddStory}
           />
@@ -119,16 +195,37 @@ export default function MatchClient({
 
         {stories
           .filter((s) => !s.isMine)
-          .map((s) => (
-            <div key={s.storyId} className="flex flex-shrink-0 flex-col items-center gap-1">
-              <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-brand-purple">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.photoUrl} alt={s.name} className="h-full w-full object-cover" />
-              </div>
-              <span className="max-w-16 truncate text-xs text-foreground/70">{s.name}</span>
-            </div>
-          ))}
+          .map((s) => {
+            const orderIndex = orderedStories.findIndex((o) => o.storyId === s.storyId);
+            return (
+              <button
+                key={s.storyId}
+                onClick={() => setViewerIndex(orderIndex)}
+                className="flex flex-shrink-0 flex-col items-center gap-1 transition-transform hover:scale-105"
+              >
+                <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-brand-purple">
+                  {s.mediaType === "video" ? (
+                    <video src={s.photoUrl} className="h-full w-full object-cover" muted />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.photoUrl} alt={s.name} className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <span className="max-w-16 truncate text-xs text-foreground/70">{s.name}</span>
+              </button>
+            );
+          })}
       </div>
+      {uploadError && <p className="mt-2 text-sm text-red-600">{uploadError}</p>}
+
+      {viewerIndex !== null && (
+        <StoryViewer
+          stories={orderedStories}
+          startIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onDeleteOwn={handleDeleteStory}
+        />
+      )}
 
       {/* Matches header */}
       <div className="mt-8 flex items-center justify-between">
@@ -163,7 +260,7 @@ export default function MatchClient({
             <a
               key={m.userId}
               href="/messages"
-              className="overflow-hidden rounded-2xl bg-white shadow-sm hover:shadow-md"
+              className="overflow-hidden rounded-2xl bg-white shadow-sm transition-shadow hover:shadow-md"
             >
               <div className="h-40 w-full bg-gray-100">
                 {m.photo ? (

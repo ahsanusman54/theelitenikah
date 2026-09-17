@@ -18,7 +18,7 @@ export default async function MatchPage() {
   // stories from visible/active profiles), newest first, one per user.
   const { data: stories } = await supabase
     .from("stories")
-    .select("id, user_id, photo_url, created_at")
+    .select("id, user_id, photo_url, media_type, created_at")
     .order("created_at", { ascending: false });
 
   const storyUserIds = Array.from(new Set((stories ?? []).map((s) => s.user_id)));
@@ -37,6 +37,7 @@ export default async function MatchPage() {
       userId: s.user_id,
       name: nameById.get(s.user_id) ?? "Unknown",
       photoUrl: s.photo_url,
+      mediaType: s.media_type as "image" | "video",
       isMine: s.user_id === myId,
     });
   }
