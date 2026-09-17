@@ -38,6 +38,14 @@ export default async function ProfileDetailPage({
 
   if (!profile) notFound();
 
+  // Record the view (upsert so repeat visits update the timestamp instead
+  // of spamming new rows / new "viewed your profile" notifications).
+  if (userId !== myId) {
+    await supabase
+      .from("visits")
+      .upsert({ visitor_id: myId, visited_id: userId, viewed_at: new Date().toISOString() }, { onConflict: "visitor_id,visited_id" });
+  }
+
   const { data: myProfile } = await supabase
     .from("profiles")
     .select("marital_status, religious_practice, willing_to_relocate, children, drinks, smokes")

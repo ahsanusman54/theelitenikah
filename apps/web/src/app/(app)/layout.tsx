@@ -20,10 +20,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .eq("user_id", user.id)
     .single();
 
+  const { data: notifications } = await supabase
+    .from("notifications")
+    .select("id, type, content, read_status, created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
   return (
     <CallProvider myId={user.id} myName={profile?.name ?? user.email ?? "You"}>
       <div className="flex min-h-full flex-col">
-        <Navbar userName={profile?.name ?? null} userEmail={user.email ?? ""} />
+        <Navbar
+          userId={user.id}
+          userName={profile?.name ?? null}
+          userEmail={user.email ?? ""}
+          initialNotifications={notifications ?? []}
+        />
         <div className="flex-1 bg-background">{children}</div>
       </div>
       <CallScreen />

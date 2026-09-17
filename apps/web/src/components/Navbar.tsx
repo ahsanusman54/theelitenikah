@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NotificationBell from "./NotificationBell";
 
 const NAV_LINKS = [
   { href: "/discover", label: "Discover" },
@@ -8,12 +9,24 @@ const NAV_LINKS = [
   { href: "/search", label: "Search" },
 ];
 
+type NotificationRow = {
+  id: string;
+  type: string;
+  content: string;
+  read_status: boolean;
+  created_at: string;
+};
+
 export default function Navbar({
+  userId,
   userName,
   userEmail,
+  initialNotifications,
 }: {
+  userId: string;
   userName: string | null;
   userEmail: string;
+  initialNotifications: NotificationRow[];
 }) {
   const displayName = userName || userEmail.split("@")[0];
 
@@ -36,6 +49,7 @@ export default function Navbar({
         </nav>
 
         <div className="flex items-center gap-4">
+          <NotificationBell myId={userId} initialNotifications={initialNotifications} />
           <Link
             href="/credits"
             className="rounded-full bg-brand-pink px-4 py-1.5 text-sm font-semibold hover:bg-brand-pink-dark"
